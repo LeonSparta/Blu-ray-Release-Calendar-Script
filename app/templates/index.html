@@ -1,60 +1,472 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="system">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blu-ray Release Calendar</title>
+    <title>Blu-ray Release Tracker</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
-        h1 { color: #333; }
-        .status { margin-bottom: 20px; padding: 10px; background: #f0f0f0; border-radius: 5px; }
-        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
-        button:disabled { background: #ccc; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --header-border: #333;
+            --btn-bg: #007bff;
+            --btn-hover: #0056b3;
+            --btn-stop-bg: #dc3545;
+            --btn-stop-hover: #a71d2a;
+            --modal-bg: #2a2a2a;
+        }
+        
+        [data-theme="light"] {
+            --bg-color: #f5f5f5;
+            --card-bg: #ffffff;
+            --text-color: #333333;
+            --header-border: #ddd;
+            --btn-bg: #007bff;
+            --btn-hover: #0056b3;
+            --modal-bg: #ffffff;
+        }
+
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: var(--bg-color); 
+            color: var(--text-color); 
+            margin: 0; 
+            padding: 20px; 
+            transition: background-color 0.3s, color 0.3s;
+        }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            border-bottom: 1px solid var(--header-border);
+            padding-bottom: 20px;
+        }
+        
+        h1 { margin: 0; font-size: 1.5rem; }
+        
+        .controls { display: flex; gap: 10px; }
+        
+        button {
+            padding: 10px 20px;
+            background: var(--btn-bg);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s, transform 0.1s;
+        }
+        
+        button:hover { background: var(--btn-hover); }
+        button:active { transform: scale(0.98); }
+        
+        button.secondary { background: #6c757d; }
+        button.secondary:hover { background: #545b62; }
+        
+        button.stop-btn { background: var(--btn-stop-bg) !important; }
+        button.stop-btn:hover { background: var(--btn-stop-hover) !important; }
+        
+        .poster-wall {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 25px;
+            padding-bottom: 60px;
+        }
+        
+        .movie-card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .movie-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .poster-container {
+            position: relative;
+            padding-top: 150%; /* 2:3 Aspect Ratio */
+            background: #2a2a2a;
+            cursor: pointer;
+        }
+        
+        .poster-container img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .no-poster {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #555;
+            font-size: 0.8rem;
+        }
+        
+        .card-content {
+            padding: 15px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        
+        .movie-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+            line-height: 1.3;
+        }
+        
+        .release-date {
+            font-size: 0.9rem;
+            color: #4CAF50; /* Green for date */
+            margin-bottom: 5px;
+        }
+        
+        .date-tba { color: #FFA000; } /* Amber for TBA */
+        
+        .sync-status {
+            font-size: 0.75rem;
+            color: #888;
+            margin-top: auto;
+        }
+        
+        footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            border-top: 1px solid var(--header-border);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: #aaa;
+            z-index: 100;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status-ok { background: #4CAF50; }
+        .status-error { background: #f44336; }
+        .status-unknown { background: #9e9e9e; }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background-color: var(--modal-bg);
+            padding: 30px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+        
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="password"], select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            background: var(--bg-color);
+            color: var(--text-color);
+        }
+
     </style>
 </head>
 <body>
-    <h1>Blu-ray Release Calendar</h1>
-    
-    <div class="status">
-        Status: <span id="run-status">{{ 'Running...' if is_running else 'Idle' }}</span>
-        <br>
-        <button id="run-btn" onclick="runScraper()" {{ 'disabled' if is_running else '' }}>Run Now</button>
+    <header>
+        <div>
+            <h1>Blu-ray Release Tracker</h1>
+            <small style="color: #888;">
+                Last Updated: <span id="last-updated">{{ state.timestamp if state.timestamp else 'Never' }}</span>
+            </small>
+        </div>
+        <div class="controls">
+            <button class="secondary" onclick="openSettings()">⚙️ Settings</button>
+            <button id="run-btn" onmouseover="hoverScan(this)" onmouseout="unhoverScan(this)" onclick="handleScanClick(this)">
+                Scan Now
+            </button>
+        </div>
+    </header>
+
+    <div id="poster-wall" class="poster-wall">
+        <!-- Movies will be injected here via JS -->
     </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Movie Title</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-        <tbody id="results-body">
-            {% for res in results %}
-            <tr>
-                <td>{{ res.title }}</td>
-                <td>{{ res.status }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <footer>
+        <div>
+            <span id="icloud-badge" class="status-badge status-unknown"></span>
+            iCloud Status: <strong id="icloud-status">Unknown</strong>
+        </div>
+        <div>
+            Powered by Python & Flask
+        </div>
+    </footer>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <h2 style="margin-top:0">Settings</h2>
+            
+            <div class="form-group">
+                <label>Theme</label>
+                <select id="setting-theme">
+                    <option value="system">Follow System</option>
+                    <option value="dark">Dark</option>
+                    <option value="light">Light</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>IMDb Watchlist URL</label>
+                <input type="text" id="setting-imdb" placeholder="https://www.imdb.com/user/.../watchlist">
+            </div>
+
+            <div class="form-group">
+                <label>iCloud Username</label>
+                <input type="text" id="setting-user" placeholder="email@icloud.com">
+            </div>
+
+            <div class="form-group">
+                <label>iCloud Password (App-Specific)</label>
+                <input type="password" id="setting-pass" placeholder="xxxx-xxxx-xxxx-xxxx">
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button class="secondary" onclick="closeSettings()">Cancel</button>
+                <button onclick="saveSettings()">Save</button>
+            </div>
+        </div>
+    </div>
 
     <script>
-        function runScraper() {
+        // Initial State from Server
+        let currentState = {{ state | tojson }};
+        let currentSettings = {{ settings | tojson }};
+
+        function render() {
+            const wall = document.getElementById('poster-wall');
             const btn = document.getElementById('run-btn');
-            const status = document.getElementById('run-status');
-            btn.disabled = true;
-            status.innerText = "Starting...";
+            const statusText = document.getElementById('icloud-status');
+            const badge = document.getElementById('icloud-badge');
+            const updated = document.getElementById('last-updated');
+
+            // Button State Logic
+            if (currentState.is_running) {
+                // If hover logic hasn't overridden it yet
+                if (!btn.matches(':hover')) {
+                    btn.innerText = "Scanning...";
+                    btn.classList.remove('stop-btn');
+                }
+                // Allow interaction to stop
+                btn.disabled = false;
+            } else {
+                btn.innerText = "Scan Now";
+                btn.classList.remove('stop-btn');
+                btn.disabled = false;
+            }
             
-            fetch('/run', { method: 'POST' })
+            updated.innerText = currentState.timestamp || 'Never';
+            
+            statusText.innerText = currentState.icloud_status;
+            badge.className = 'status-badge ' + (
+                currentState.icloud_status.includes('Connected') ? 'status-ok' : 
+                currentState.icloud_status.includes('Error') ? 'status-error' : 'status-unknown'
+            );
+
+            // Render Movies
+            if (currentState.movies.length === 0) {
+                wall.innerHTML = `
+                    <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #555;">
+                        ${currentState.is_running ? 'Scanning...' : 'No unreleased movies found or scan hasn\'t run yet.'}
+                    </div>
+                `;
+                return;
+            }
+
+            wall.innerHTML = currentState.movies.map(m => `
+                <div class="movie-card">
+                    <div class="poster-container" onclick="window.open('${m.imdb_url}', '_blank')">
+                        ${m.poster_url ? 
+                            `<img src="${m.poster_url}" alt="${m.title}" loading="lazy">` : 
+                            `<div class="no-poster">No Poster</div>`
+                        }
+                    </div>
+                    <div class="card-content">
+                        <div class="movie-title">${m.title} ${m.year ? `(${m.year})` : ''}</div>
+                        <div>
+                            ${m.release_date === 'TBA' ? 
+                                `<div class="release-date date-tba">Date: TBA</div>` : 
+                                `<div class="release-date">Releases: ${m.release_date}</div>`
+                            }
+                            <div class="sync-status">iCloud: ${m.sync_status}</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Button Interactions
+        function hoverScan(btn) {
+            if (currentState.is_running) {
+                btn.innerText = "Stop Scanning";
+                btn.classList.add('stop-btn');
+            }
+        }
+
+        function unhoverScan(btn) {
+            if (currentState.is_running) {
+                btn.innerText = "Scanning...";
+                btn.classList.remove('stop-btn');
+            }
+        }
+
+        function handleScanClick(btn) {
+            if (currentState.is_running) {
+                // Stop action
+                fetch('/stop', { method: 'POST' })
+                    .then(r => r.json())
+                    .then(data => {
+                        console.log(data.status);
+                        btn.innerText = "Stopping...";
+                    });
+            } else {
+                // Start action
+                currentState.is_running = true;
+                btn.innerText = "Scanning...";
+                render();
+                
+                fetch('/run', { method: 'POST' })
+                    .catch(err => {
+                        alert("Error starting scan");
+                        currentState.is_running = false;
+                        render();
+                    });
+            }
+        }
+
+        // Settings Logic
+        function openSettings() {
+            document.getElementById('settings-modal').style.display = 'flex';
+            document.getElementById('setting-theme').value = currentSettings.THEME || 'system';
+            document.getElementById('setting-imdb').value = currentSettings.IMDB_WATCHLIST_URL || '';
+            document.getElementById('setting-user').value = currentSettings.ICLOUD_USERNAME || '';
+            
+            const passInput = document.getElementById('setting-pass');
+            if (currentSettings.ICLOUD_PASSWORD && currentSettings.ICLOUD_PASSWORD.length > 0) {
+                passInput.value = '*****'; 
+                passInput.dataset.isMasked = 'true';
+            } else {
+                passInput.value = '';
+                passInput.dataset.isMasked = 'false';
+            }
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-modal').style.display = 'none';
+        }
+
+        function saveSettings() {
+            const passInput = document.getElementById('setting-pass');
+            let password = passInput.value;
+            
+            if (passInput.dataset.isMasked === 'true' && password === '*****') {
+                password = currentSettings.ICLOUD_PASSWORD;
+            }
+
+            const data = {
+                THEME: document.getElementById('setting-theme').value,
+                IMDB_WATCHLIST_URL: document.getElementById('setting-imdb').value,
+                ICLoud_USERNAME: document.getElementById('setting-user').value,
+                ICLOUD_PASSWORD: password
+            };
+
+            fetch('/settings', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            })
+            .then(r => r.json())
+            .then(() => {
+                currentSettings = data;
+                applyTheme();
+                closeSettings();
+                alert('Settings saved!');
+            });
+        }
+        
+        document.getElementById('setting-pass').addEventListener('focus', function() {
+            if (this.dataset.isMasked === 'true') {
+                this.value = '';
+                this.dataset.isMasked = 'false';
+            }
+        });
+
+        function applyTheme() {
+            const theme = currentSettings.THEME || 'system';
+            const html = document.documentElement;
+            
+            if (theme === 'system') {
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+                    html.setAttribute('data-theme', 'light');
+                } else {
+                    html.setAttribute('data-theme', 'dark');
+                }
+            } else {
+                html.setAttribute('data-theme', theme);
+            }
+        }
+
+        // Polling
+        setInterval(() => {
+            fetch('/status')
                 .then(r => r.json())
                 .then(data => {
-                    status.innerText = "Running... (Refresh page to see results)";
-                    // Auto-refresh logic could go here
-                    setTimeout(() => window.location.reload(), 5000);
+                    currentState = data;
+                    render();
                 });
-        }
+        }, 2000);
+
+        // Init
+        applyTheme();
+        render();
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+
     </script>
 </body>
 </html>
