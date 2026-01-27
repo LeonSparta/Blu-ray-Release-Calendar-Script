@@ -1,0 +1,8 @@
+flask
+apscheduler
+requests
+beautifulsoup4
+caldav
+python-dateutil
+pytz
+icalendar

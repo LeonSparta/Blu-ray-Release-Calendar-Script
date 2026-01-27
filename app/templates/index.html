@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blu-ray Release Calendar</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        h1 { color: #333; }
+        .status { margin-bottom: 20px; padding: 10px; background: #f0f0f0; border-radius: 5px; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:disabled { background: #ccc; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
+    </style>
+</head>
+<body>
+    <h1>Blu-ray Release Calendar</h1>
+    
+    <div class="status">
+        Status: <span id="run-status">{{ 'Running...' if is_running else 'Idle' }}</span>
+        <br>
+        <button id="run-btn" onclick="runScraper()" {{ 'disabled' if is_running else '' }}>Run Now</button>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Movie Title</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody id="results-body">
+            {% for res in results %}
+            <tr>
+                <td>{{ res.title }}</td>
+                <td>{{ res.status }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <script>
+        function runScraper() {
+            const btn = document.getElementById('run-btn');
+            const status = document.getElementById('run-status');
+            btn.disabled = true;
+            status.innerText = "Starting...";
+            
+            fetch('/run', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    status.innerText = "Running... (Refresh page to see results)";
+                    // Auto-refresh logic could go here
+                    setTimeout(() => window.location.reload(), 5000);
+                });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  bluray-calendar:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/app
+    environment:
+      - FLASK_ENV=development
+      - ICLOUD_USERNAME=your_email@icloud.com
+      - ICLOUD_PASSWORD=your_app_specific_password
+      - IMDB_WATCHLIST_URL=https://www.imdb.com/user/ur110300787/watchlist/?ref_=hm_nv_urwls_all&sort=release_date%2Cdesc
+    restart: unless-stopped
