@@ -11,7 +11,10 @@ __pycache__/
 # Environment variables (secrets)
 .env
 instance/
-config.json
+
+# Data Directory (Persistent)
+data/*
+!data/.gitkeep
 
 # IDEs
 .vscode/

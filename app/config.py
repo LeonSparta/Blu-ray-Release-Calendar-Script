@@ -2,8 +2,15 @@ import os
 import json
 
 class SettingsManager:
-    FILE_PATH = 'config.json'
+    # Store config in a 'data' folder for easier volume mounting
+    DATA_DIR = 'data'
+    FILE_PATH = os.path.join(DATA_DIR, 'config.json')
     
+    @staticmethod
+    def _ensure_data_dir():
+        if not os.path.exists(SettingsManager.DATA_DIR):
+            os.makedirs(SettingsManager.DATA_DIR)
+
     @staticmethod
     def load_settings():
         # defaults from environment or hardcoded fallback
@@ -19,18 +26,15 @@ class SettingsManager:
             try:
                 with open(SettingsManager.FILE_PATH, 'r') as f:
                     data = json.load(f)
-                    # Update only if key exists in json to allow partial overrides
-                    # actually we want json to win, but defaults to fill gaps
                     for k, v in data.items():
-                        if v: # Only override if not empty? User might want to clear it. 
-                            # Let's say JSON wins.
-                            defaults[k] = v
+                        defaults[k] = v
             except Exception:
                 pass
         return defaults
 
     @staticmethod
     def save_settings(data):
+        SettingsManager._ensure_data_dir()
         current = SettingsManager.load_settings()
         current.update(data)
         with open(SettingsManager.FILE_PATH, 'w') as f:
