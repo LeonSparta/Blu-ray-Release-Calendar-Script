@@ -1,74 +1,84 @@
-# Blu-ray Release Calendar Sync
+# Blu-ray Release Calendar Script
 
-An automated tool to sync your IMDb watchlist with Blu-ray.com release dates and add them to your iCloud calendar.
+A Dockerized Python web application that automatically scrapes IMDb watchlists, finds confirmed Blu-ray release dates (globally), and syncs them to an iCloud calendar.
 
 ## Features
 
-- **IMDb Watchlist Sync**: Automatically fetches movies from your public IMDb watchlist, filtering out TV shows.
-- **Smart Date Finding**: Scrapes Blu-ray.com using advanced matching logic (Year filtering, Redirect handling, Global search) to find the earliest confirmed release date.
-- **Real-Time "Poster Wall"**: A beautiful, dark-mode web interface that displays movie posters and updates their status live as they are scanned.
-- **iCloud Integration**: Automatically adds all-day events to a dedicated "Blu-ray Releases" calendar via CalDAV.
-- **In-App Settings**: Configure your IMDb URL, iCloud credentials, and UI Theme directly from the web interface.
-- **Daily Automation**: Runs automatically every day at 8:00 AM using a background scheduler.
-- **Dockerized**: Easy deployment using Docker and Docker Compose.
+*   **🎬 IMDb Watchlist Sync**: Automatically fetches movies from a public or private IMDb watchlist.
+*   **🌍 Global Blu-ray Search**: Uses Blu-ray.com's **Advanced Search** with global filters to find release dates from any region (US, UK, DE, etc.).
+*   **📅 iCloud Calendar Integration**: 
+    *   Creates "All Day" events for confirmed releases.
+    *   **Smart Rescheduling**: Automatically detects date changes, deletes the old event, and creates a new one to ensure clean syncing.
+    *   **Duplicate Prevention**: Checks for existing events on the target day before adding.
+*   **🧠 Intelligent Filtering**:
+    *   **1-Year Sanity Check**: Automatically filters out films released more than 1 year ago to keep the view focused on upcoming/recent titles.
+    *   **Strict Matching**: Verifies Title + Year to avoid false positives with remakes.
+    *   **Redirect Handling**: Handles cases where Blu-ray.com redirects directly to a movie page.
+*   **🖥️ Real-Time Dashboard**:
+    *   Visual "Poster Wall" of your watchlist.
+    *   Live scanning progress.
+    *   Settings management (iCloud credentials, Scan Time, Theme).
+    *   Dark/Light/System theme support.
+*   **🐳 Docker Ready**: easy deployment with Docker Compose.
 
 ## Prerequisites
 
-- [Docker](https://www.docker.com/get-started) and [Docker Compose](https://docs.docker.com/compose/install/)
-- An **iCloud App-Specific Password** (Required for security; your main Apple ID password will not work for CalDAV).
-    - Generate one at [appleid.apple.com](https://appleid.apple.com/) under the "App-Specific Passwords" section.
+*   **iCloud App-Specific Password**: Required for CalDAV access. [Generate one here](https://appleid.apple.com/).
+*   **IMDb Watchlist**: Must be a public list or accessible via the provided URL.
+*   **Docker** (optional, for containerized run).
 
-## Setup & Installation
+## Installation & Usage
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/yourusername/Blu-ray-Release-Calendar-Script.git
-   cd Blu-ray-Release-Calendar-Script
-   ```
+### 1. Local Development (Windows/Linux/Mac)
 
-2. **Configure Environment Variables**:
-   Open `docker-compose.yml` and update the `environment` section:
-   ```yaml
-   environment:
-     - ICLOUD_USERNAME=your_apple_id@icloud.com
-     - ICLOUD_PASSWORD=xxxx-xxxx-xxxx-xxxx  # Your App-Specific Password
-     - IMDB_WATCHLIST_URL=https://www.imdb.com/user/ur110300787/watchlist/
-     - CALENDAR_NAME=Blu-ray Releases      # Optional: Name of the sub-calendar
-   ```
+```bash
+# Clone repository
+git clone <repo-url>
+cd Blu-ray-Release-Calendar-Script
 
-3. **Start the application**:
-   ```bash
-   docker-compose up -d --build
-   ```
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # or .venv\Scripts\activate on Windows
 
-## Usage
+# Install dependencies
+pip install -r requirements.txt
 
-### Web Interface
-Once the container is running, access the dashboard at:
-**`http://localhost:5000`**
+# Run the app
+flask run
+```
+Access the dashboard at `http://localhost:5000`.
 
-From the dashboard, you can:
-- **Scan Now**: Triggers an immediate scrape. You will see posters appear and update in real-time.
-- **Stop Scanning**: Interrupts the process at any time.
-- **Settings**: Update your credentials, change the theme (Light/Dark/System), or change the monitored watchlist URL without restarting the container.
-- **Click Posters**: Opens the movie's IMDb page in a new tab.
+### 2. Docker
 
-### Automation
-The script is configured to run automatically every day at **08:00 AM** (container time). You don't need to keep the browser open for the scheduled tasks to run.
+```bash
+docker-compose up --build -d
+```
 
-## How it Works
+## Configuration
 
-1. **Scraping**: Fetches your watchlist from IMDb, extracting titles and years.
-2. **Matching**: Queries Blu-ray.com using a global search. It prioritizes exact title matches and strictly filters by year to avoid confusing remakes (e.g., *The Housemaid* 2010 vs 2025). It handles redirects for single results and parses list tables for multiple results.
-3. **Calendar Sync**: Connects to iCloud via `caldav`. It adds future releases to your calendar and updates existing events if release dates change.
+Settings can be managed directly via the **Web UI** (click the "Settings" button):
 
-## Development & Debugging
+*   **Daily Refresh Time**: Set the time for the automated background scan.
+*   **IMDb Watchlist URL**: Full URL to your watchlist (e.g., `https://www.imdb.com/user/ur.../watchlist`).
+*   **iCloud Credentials**: Username and App-Specific Password.
 
-If you want to test the scraper logic without running the full web app/docker:
-1. Create a virtual environment: `python -m venv .venv`
-2. Activate it: `.venv\Scripts\activate` (Windows) or `source .venv/bin/activate` (Linux/Mac)
-3. Install dependencies: `pip install -r requirements.txt`
-4. Run the debug toolkit: `python debug_toolkit.py` - This interactive tool allows you to test the scraper against specific movies to diagnose missing dates.
+*Note: Credentials are stored locally in `config.json` (excluded from git).*
+
+## How It Works
+
+1.  **Scrape**: The app fetches your IMDb watchlist using `requests` and `BeautifulSoup`.
+2.  **Filter**: It discards TV shows and films released >1 year ago.
+3.  **Search**: For each movie, it performs an Advanced Search on Blu-ray.com, setting cookies to ensure **Global** results are returned.
+4.  **Sync**: 
+    *   If a date is found, it connects to iCloud via `caldav`.
+    *   It checks if the event exists.
+    *   If the date changed, it **deletes** the old event and **creates** a new one.
+    *   If new, it adds it.
+
+## Troubleshooting
+
+*   **"iCloud: Error"**: Check your App-Specific Password. Ensure the calendar name defined in `config.py` (default: "Blu-ray Releases") exists or can be created.
+*   **"Released (Will Hide)"**: The movie has a release date in the past and will be removed from the active view.
 
 ## License
 MIT

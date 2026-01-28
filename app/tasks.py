@@ -1,9 +1,10 @@
 import requests
 from bs4 import BeautifulSoup
 import caldav
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import time
 import re
+import uuid
 from app.config import Config, SettingsManager
 import logging
 
@@ -20,6 +21,8 @@ class MovieScraper:
             'Referer': 'https://www.blu-ray.com/',
         })
         self.session.cookies.set('listlayout_7', 'simple', domain='.blu-ray.com')
+        # Enable Global Search for Advanced Search
+        self.session.cookies.set('country', 'all', domain='.blu-ray.com')
         try:
             self.session.get("https://www.blu-ray.com/", timeout=10)
         except Exception as e:
@@ -242,23 +245,67 @@ def sync_to_calendar(movie_data, settings):
         calendar = next((cal for cal in principal.calendars() if cal.name == calendar_name), None)
         if not calendar: calendar = principal.make_calendar(name=calendar_name)
         
-        title, release_date = movie_data['title'], movie_data['release_date']
+        title, release_date_obj = movie_data['title'], movie_data['release_date']
+        
+        if isinstance(release_date_obj, datetime):
+            start_dt = release_date_obj.date()
+        else:
+            start_dt = release_date_obj
+            
+        end_dt = start_dt + timedelta(days=1)
+
+        # 1. Search specific day first to detect duplicates
+        # date_search is deprecated in newer caldav, use search(start=...)
+        # But for range, it might return list.
+        day_events = calendar.search(start=start_dt, end=end_dt, event=True, expand=True)
+        
+        for event in day_events:
+            # New caldav 1.0+ access via icalendar_component
+            comp = event.icalendar_component
+            if comp and str(comp.get('SUMMARY')) == title:
+                return "Synced"
+
+        # 2. Search globally to see if date changed
         found_events = calendar.search(summary=title, event=True, expand=False)
-        existing_event = next((e for e in found_events if hasattr(e.vobject.instance.vevent, 'summary') and e.vobject.instance.vevent.summary.value == title), None)
+        existing_event = None
+        for event in found_events:
+            comp = event.icalendar_component
+            if comp and str(comp.get('SUMMARY')) == title:
+                existing_event = event
+                break
         
         if existing_event:
-            cur = existing_event.vobject.instance.vevent.dtstart.value
-            if isinstance(cur, datetime): cur = cur.date()
-            if cur != release_date.date():
-                existing_event.vobject.instance.vevent.dtstart.value = release_date.date()
-                existing_event.save()
-                return "Updated"
-            return "Synced"
-        else:
-            calendar.save_event(dtstart=release_date.date(), summary=title, description=f"Blu-ray release for {title}.")
-            return "Added"
+            # Update existing
+            comp = existing_event.icalendar_component
+            
+            # Extract current start date
+            current_start_prop = comp.get('DTSTART')
+            if hasattr(current_start_prop, 'dt'):
+                current_start = current_start_prop.dt
+            else:
+                current_start = current_start_prop # direct value if simple
+
+            if isinstance(current_start, datetime):
+                current_start = current_start.date()
+            
+            if current_start != start_dt:
+                # Date changed: Delete old and create new
+                existing_event.delete()
+                # Fall through to creation logic below
+            else:
+                return "Synced"
+        
+        # 3. Create New (or Re-create)
+        calendar.save_event(
+            dtstart=start_dt,
+            dtend=end_dt,
+            summary=title,
+            description=f"Blu-ray release for {title}."
+        )
+        return "Added" if not existing_event or current_start != start_dt else "Synced"
+            
     except Exception as e:
-        return f"Error"
+        return f"Error: {str(e)}"
 
 def process_watchlist_realtime(state_ref):
     settings = SettingsManager.load_settings()
@@ -267,8 +314,27 @@ def process_watchlist_realtime(state_ref):
     
     if state_ref.get('stop_requested'): return
 
+    # FIX: Fetch IMDb list before using movies_raw
     movies_raw = scraper.get_imdb_watchlist(watchlist_url)
-    state_ref['movies'] = [{'title': m['title'], 'poster_url': m['poster_url'], 'imdb_url': m.get('imdb_url', '#'), 'release_date': 'Searching...', 'sync_status': 'Pending', 'year': m.get('year')} for m in movies_raw]
+
+    # 2. Populate UI immediately (filtering out old films)
+    current_year = datetime.now().year
+    state_ref['movies'] = []
+    
+    for m in movies_raw:
+        # 1-Year Sanity Check: Skip films released more than 1 year ago
+        film_year = m.get('year')
+        if film_year and film_year < (current_year - 1):
+            continue
+            
+        state_ref['movies'].append({
+            'title': m['title'],
+            'poster_url': m['poster_url'],
+            'imdb_url': m.get('imdb_url', '#'),
+            'release_date': 'Searching...',
+            'sync_status': 'Pending',
+            'year': film_year
+        })
     state_ref['timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     if state_ref.get('stop_requested'): return

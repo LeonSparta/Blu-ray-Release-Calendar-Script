@@ -11,7 +11,8 @@ class SettingsManager:
             'ICLOUD_USERNAME': os.environ.get('ICLOUD_USERNAME', ''),
             'ICLOUD_PASSWORD': os.environ.get('ICLOUD_PASSWORD', ''),
             'IMDB_WATCHLIST_URL': os.environ.get('IMDB_WATCHLIST_URL', '') or "https://www.imdb.com/user/ur110300787/watchlist/?ref_=hm_nv_urwls_all&sort=release_date%2Cdesc",
-            'THEME': 'system'
+            'THEME': 'system',
+            'REFRESH_TIME': '08:00'
         }
         
         if os.path.exists(SettingsManager.FILE_PATH):

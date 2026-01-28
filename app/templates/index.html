@@ -196,7 +196,7 @@
         
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input[type="text"], input[type="password"], select {
+        input[type="text"], input[type="password"], input[type="time"], select {
             width: 100%;
             padding: 10px;
             border: 1px solid #ccc;
@@ -217,7 +217,7 @@
             </small>
         </div>
         <div class="controls">
-            <button class="secondary" onclick="openSettings()">⚙️ Settings</button>
+            <button class="secondary" onclick="openSettings()">Settings</button>
             <button id="run-btn" onmouseover="hoverScan(this)" onmouseout="unhoverScan(this)" onclick="handleScanClick(this)">
                 Scan Now
             </button>
@@ -250,6 +250,11 @@
                     <option value="dark">Dark</option>
                     <option value="light">Light</option>
                 </select>
+            </div>
+
+            <div class="form-group">
+                <label>Daily Refresh Time (24h)</label>
+                <input type="time" id="setting-time">
             </div>
 
             <div class="form-group">
@@ -288,12 +293,10 @@
 
             // Button State Logic
             if (currentState.is_running) {
-                // If hover logic hasn't overridden it yet
                 if (!btn.matches(':hover')) {
                     btn.innerText = "Scanning...";
                     btn.classList.remove('stop-btn');
                 }
-                // Allow interaction to stop
                 btn.disabled = false;
             } else {
                 btn.innerText = "Scan Now";
@@ -358,7 +361,6 @@
 
         function handleScanClick(btn) {
             if (currentState.is_running) {
-                // Stop action
                 fetch('/stop', { method: 'POST' })
                     .then(r => r.json())
                     .then(data => {
@@ -366,7 +368,6 @@
                         btn.innerText = "Stopping...";
                     });
             } else {
-                // Start action
                 currentState.is_running = true;
                 btn.innerText = "Scanning...";
                 render();
@@ -384,6 +385,7 @@
         function openSettings() {
             document.getElementById('settings-modal').style.display = 'flex';
             document.getElementById('setting-theme').value = currentSettings.THEME || 'system';
+            document.getElementById('setting-time').value = currentSettings.REFRESH_TIME || '08:00';
             document.getElementById('setting-imdb').value = currentSettings.IMDB_WATCHLIST_URL || '';
             document.getElementById('setting-user').value = currentSettings.ICLOUD_USERNAME || '';
             
@@ -411,8 +413,9 @@
 
             const data = {
                 THEME: document.getElementById('setting-theme').value,
+                REFRESH_TIME: document.getElementById('setting-time').value,
                 IMDB_WATCHLIST_URL: document.getElementById('setting-imdb').value,
-                ICLoud_USERNAME: document.getElementById('setting-user').value,
+                ICLOUD_USERNAME: document.getElementById('setting-user').value,
                 ICLOUD_PASSWORD: password
             };
 
