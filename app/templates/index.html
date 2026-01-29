@@ -291,7 +291,7 @@
             const badge = document.getElementById('icloud-badge');
             const updated = document.getElementById('last-updated');
 
-            // Button State Logic
+            // Button State
             if (currentState.is_running) {
                 if (!btn.matches(':hover')) {
                     btn.innerText = "Scanning...";
@@ -312,36 +312,91 @@
                 currentState.icloud_status.includes('Error') ? 'status-error' : 'status-unknown'
             );
 
-            // Render Movies
+            // Empty State
             if (currentState.movies.length === 0) {
-                wall.innerHTML = `
-                    <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #555;">
-                        ${currentState.is_running ? 'Scanning...' : 'No unreleased movies found or scan hasn\'t run yet.'}
-                    </div>
-                `;
+                if (!document.getElementById('empty-msg')) {
+                    wall.innerHTML = `
+                        <div id="empty-msg" style="grid-column: 1/-1; text-align: center; padding: 40px; color: #555;">
+                            ${currentState.is_running ? 'Scanning...' : 'No unreleased movies found or scan hasn\'t run yet.'}
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('empty-msg').innerText = currentState.is_running ? 'Scanning...' : 'No unreleased movies found or scan hasn\'t run yet.';
+                }
                 return;
             }
 
-            wall.innerHTML = currentState.movies.map(m => `
-                <div class="movie-card">
-                    <div class="poster-container" onclick="window.open('${m.imdb_url}', '_blank')">
-                        ${m.poster_url ? 
-                            `<img src="${m.poster_url}" alt="${m.title}" loading="lazy">` : 
-                            `<div class="no-poster">No Poster</div>`
-                        }
-                    </div>
-                    <div class="card-content">
-                        <div class="movie-title">${m.title} ${m.year ? `(${m.year})` : ''}</div>
-                        <div>
-                            ${m.release_date === 'TBA' ? 
-                                `<div class="release-date date-tba">Date: TBA</div>` : 
-                                `<div class="release-date">Releases: ${m.release_date}</div>`
-                            }
-                            <div class="sync-status">iCloud: ${m.sync_status}</div>
+            // Remove empty message if exists
+            const emptyMsg = document.getElementById('empty-msg');
+            if (emptyMsg) emptyMsg.remove();
+
+            // Track current keys
+            const newTitles = new Set();
+
+            currentState.movies.forEach(m => {
+                const safeId = 'movie-' + m.title.replace(/[^a-zA-Z0-9]/g, '-');
+                newTitles.add(safeId);
+                
+                let card = document.getElementById(safeId);
+                
+                // Data for checking changes
+                const posterSrc = m.poster_url || '';
+                const dateText = m.release_date === 'TBA' ? 'Date: TBA' : `Releases: ${m.release_date}`;
+                const statusText = `iCloud: ${m.sync_status}`;
+                const titleText = `${m.title} ${m.year ? `(${m.year})` : ''}`;
+
+                if (!card) {
+                    // Create New
+                    card = document.createElement('div');
+                    card.className = 'movie-card';
+                    card.id = safeId;
+                    card.innerHTML = `
+                        <div class="poster-container" onclick="window.open('${m.imdb_url}', '_blank')">
+                            ${posterSrc ? `<img src="${posterSrc}" alt="${m.title}" loading="lazy">` : `<div class="no-poster">No Poster</div>`}
                         </div>
-                    </div>
-                </div>
-            `).join('');
+                        <div class="card-content">
+                            <div class="movie-title">${titleText}</div>
+                            <div>
+                                <div class="release-date ${m.release_date === 'TBA' ? 'date-tba' : ''}">${dateText}</div>
+                                <div class="sync-status">${statusText}</div>
+                            </div>
+                        </div>
+                    `;
+                    wall.appendChild(card);
+                } else {
+                    // Update Existing
+                    // Title
+                    const titleEl = card.querySelector('.movie-title');
+                    if (titleEl.innerText !== titleText) titleEl.innerText = titleText;
+                    
+                    // Poster (Only update if changed to avoid flash)
+                    const img = card.querySelector('img');
+                    if (img && img.src !== posterSrc && posterSrc) {
+                        img.src = posterSrc;
+                    } else if (!img && posterSrc) {
+                        // Was no poster, now poster
+                        card.querySelector('.poster-container').innerHTML = `<img src="${posterSrc}" alt="${m.title}" loading="lazy">`;
+                    }
+
+                    // Date
+                    const dateEl = card.querySelector('.release-date');
+                    if (dateEl.innerText !== dateText) {
+                        dateEl.innerText = dateText;
+                        dateEl.className = `release-date ${m.release_date === 'TBA' ? 'date-tba' : ''}`;
+                    }
+                    
+                    // Status
+                    const statusEl = card.querySelector('.sync-status');
+                    if (statusEl.innerText !== statusText) statusEl.innerText = statusText;
+                }
+            });
+
+            // Cleanup removed cards
+            Array.from(wall.children).forEach(child => {
+                if (child.id && !newTitles.has(child.id)) {
+                    child.remove();
+                }
+            });
         }
 
         // Button Interactions

@@ -184,17 +184,28 @@ class MovieScraper:
                 link_text = link.get_text(" ", strip=True)
                 norm_link_text = re.sub(r'\s+4K$', '', link_text, flags=re.IGNORECASE)
                 
+                # Match Logic
                 is_exact = False
                 is_partial = False
                 
-                if norm_link_text.lower() == title.lower():
+                norm_lower = norm_link_text.lower()
+                title_lower = title.lower()
+                
+                # Check 1: Direct Match
+                if norm_lower == title_lower:
                     is_exact = True
                 else:
-                    no_parens = re.sub(r'\s*\(.*?\)', '', norm_link_text).strip()
-                    if no_parens.lower() == title.lower():
+                    # Check 2: Match inside parentheses (e.g. "Foreign Title (English Title)")
+                    parens_matches = re.findall(r'\((.*?)\)', norm_link_text)
+                    if any(p.strip().lower() == title_lower for p in parens_matches):
                         is_exact = True
-                    elif title.lower() in norm_link_text.lower():
-                        is_partial = True
+                    else:
+                        # Check 3: Match with parens removed
+                        no_parens = re.sub(r'\s*\(.*?\)', '', norm_link_text).strip()
+                        if no_parens.lower() == title_lower:
+                            is_exact = True
+                        elif title_lower in norm_lower:
+                            is_partial = True
                 
                 if not (is_exact or is_partial):
                     continue
@@ -254,55 +265,66 @@ def sync_to_calendar(movie_data, settings):
             
         end_dt = start_dt + timedelta(days=1)
 
-        # 1. Search specific day first to detect duplicates
-        # date_search is deprecated in newer caldav, use search(start=...)
-        # But for range, it might return list.
-        day_events = calendar.search(start=start_dt, end=end_dt, event=True, expand=True)
+        # Aggressive Sync Strategy:
+        # 1. Scan a wide range (Current Year + Next Year) to find ALL instances of this movie.
+        # 2. Keep the one on the correct date.
+        # 3. Delete any on wrong dates (Duplicates/Old dates).
         
-        for event in day_events:
-            # New caldav 1.0+ access via icalendar_component
-            comp = event.icalendar_component
-            if comp and str(comp.get('SUMMARY')) == title:
-                return "Synced"
+        now = datetime.now()
+        start_scan = datetime(now.year, 1, 1)
+        end_scan = datetime(now.year + 1, 12, 31, 23, 59, 59)
+        
+        # We search by date range because summary search is unreliable on iCloud
+        try:
+            scan_events = calendar.search(start=start_scan, end=end_scan, event=True, expand=False)
+        except Exception:
+            scan_events = []
 
-        # 2. Search globally to see if date changed
-        found_events = calendar.search(summary=title, event=True, expand=False)
-        existing_event = None
-        for event in found_events:
+        matching_events = []
+        for event in scan_events:
             comp = event.icalendar_component
-            if comp and str(comp.get('SUMMARY')) == title:
-                existing_event = event
-                break
-        
-        if existing_event:
-            # Update existing
-            comp = existing_event.icalendar_component
+            if comp:
+                summary = str(comp.get('SUMMARY') or '')
+                if summary.strip().lower() == title.strip().lower():
+                    matching_events.append(event)
+
+        correct_event_exists = False
+        action_taken = "Synced"
+
+        for event in matching_events:
+            comp = event.icalendar_component
             
-            # Extract current start date
+            # Check Start Date
             current_start_prop = comp.get('DTSTART')
             if hasattr(current_start_prop, 'dt'):
                 current_start = current_start_prop.dt
             else:
-                current_start = current_start_prop # direct value if simple
+                current_start = current_start_prop
 
             if isinstance(current_start, datetime):
                 current_start = current_start.date()
-            
-            if current_start != start_dt:
-                # Date changed: Delete old and create new
-                existing_event.delete()
-                # Fall through to creation logic below
+
+            if current_start == start_dt:
+                correct_event_exists = True
             else:
-                return "Synced"
+                # Wrong date -> Delete (Deduplicate)
+                try:
+                    event.delete()
+                    action_taken = "Updated (Cleaned)"
+                except:
+                    pass
+
+        if correct_event_exists:
+            return action_taken
         
-        # 3. Create New (or Re-create)
+        # 3. Create New
         calendar.save_event(
             dtstart=start_dt,
             dtend=end_dt,
             summary=title,
             description=f"Blu-ray release for {title}."
         )
-        return "Added" if not existing_event or current_start != start_dt else "Synced"
+        return "Added"
             
     except Exception as e:
         return f"Error: {str(e)}"
@@ -362,13 +384,19 @@ def process_watchlist_realtime(state_ref):
         if date_obj:
             m['release_date'] = date_obj.strftime("%Y-%m-%d")
             
-            if date_obj.date() < date.today():
-                indices_to_remove.append(i)
-                m['sync_status'] = "Released (Will Hide)"
-            else:
+            # Sync to calendar first (ensure incorrect future events are moved/updated)
+            if icloud_connected:
                 m_data_for_sync = m.copy()
                 m_data_for_sync['release_date'] = date_obj
-                m['sync_status'] = sync_to_calendar(m_data_for_sync, settings) if icloud_connected else "N/A"
+                sync_result = sync_to_calendar(m_data_for_sync, settings)
+                m['sync_status'] = sync_result
+            else:
+                m['sync_status'] = "N/A"
+
+            # If released in the past, mark for removal from UI
+            if date_obj.date() < date.today():
+                indices_to_remove.append(i)
+                m['sync_status'] += " (Released)"
         else:
             m['release_date'] = "TBA"
             m['sync_status'] = "N/A"

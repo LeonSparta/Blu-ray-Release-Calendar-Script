@@ -8,12 +8,13 @@ This project is a Python-based automation tool designed to monitor an IMDb watch
 2.  **Blu-ray.com Search:** 
     *   Uses **Advanced Search** (`/movies/search.php`) with `yearfrom`/`yearto` parameters.
     *   **Global Scope:** Sets `country=all` cookie to ensure international releases (e.g., German mediabooks) are found.
-    *   **Strict Matching:** Verifies Title and Year exact matches.
+    *   **Strict Matching:** Verifies Title and Year. Also checks for titles appearing exactly within parentheses (e.g. "Foreign Title (English Title)").
 3.  **CalDAV Integration (iCloud):**
     *   Uses `caldav` library with `icalendar` component manipulation.
-    *   **Rescheduling:** If a release date changes, the old event is **deleted** and a new one is created.
+    *   **Robust De-Duplication:** Before adding/updating, it performs a **Wide Range Search** (Current Year + Next Year) to find *any* existing events with the same title, even if they are on the wrong date.
+    *   **Clean Rescheduling:** If an event is found on the wrong date, it is explicitly **deleted** before the new one is created.
     *   **All-Day Events:** Correctly sets `dtstart` and `dtend` (start + 1 day) to satisfy iCloud requirements.
-4.  **Real-Time UI:** Flask-based polling (`/status`) with a responsive Grid layout.
+4.  **Real-Time UI:** Flask-based polling (`/status`) with a responsive Grid layout. Features **Differential DOM Updates** to prevent UI flickering/jumping during scans.
 
 ## Technology Stack
 *   **Language:** Python 3.11
@@ -27,20 +28,20 @@ This project is a Python-based automation tool designed to monitor an IMDb watch
 
 *   **`app/tasks.py`**: The core logic engine.
     *   `MovieScraper`: Handles Advanced Search and Global Cookie management.
-    *   `sync_to_calendar`: Robust CalDAV logic with duplicate detection and delete-replace update strategy.
-    *   `process_watchlist_realtime`: Orchestrator with 1-year sanity check.
+    *   `sync_to_calendar`: Robust CalDAV logic with aggressive de-duplication (Wide Range Search fallback).
+    *   `process_watchlist_realtime`: Orchestrator with 1-year sanity check and UI state management.
 *   **`app/routes.py`**: Flask endpoints (`/run`, `/settings`, `/status`). Handles scheduler updates.
-*   **`app/config.py`**: `SettingsManager` for `config.json` persistence.
+*   **`app/config.py`**: `SettingsManager` for `data/config.json` persistence.
 *   **`utilities/reference_script.py`**: Reference logic for CalDAV (archived).
-*   **`debug/`**: directory containing debug tools (`debug_toolkit.py`, etc.).
+*   **`debug/`**: directory containing debug tools.
 
 ## Setup & Configuration
-*   **Credentials:** Stored in `config.json` (git-ignored).
+*   **Credentials:** Stored in `data/config.json` (git-ignored, volume-mounted).
 *   **Environment:** `.venv` for local, `Dockerfile` for container.
 
 ## Recent Changes (Jan 2026)
 1.  **Global Search Fix:** Switched to Advanced Search + Cookies to find "No Other Choice" and "The Housemaid" (German releases).
-2.  **iCloud Fixes:** Resolved `403 Forbidden` / `404` errors by correctly setting `dtend` for all-day events and using `icalendar_component` for property access.
-3.  **Clean Rescheduling:** Implemented "Delete Old -> Create New" logic for date changes.
-4.  **Optimization:** Added pre-fetch filtering to exclude movies >1 year old from the UI entirely.
-5.  **UX:** Added Time Picker for daily scan and removed "Gear" icon from settings button.
+2.  **iCloud Fixes:** Resolved `403 Forbidden` / `404` errors by correctly setting `dtend` for all-day events.
+3.  **Aggressive De-Duplication:** Implemented a Wide Range Search (Current + Next Year) to detect and delete duplicate events on wrong dates, fixing the "Orphaned Event" issue.
+4.  **UI Polish:** Implemented differential DOM updates to stop the movie cards from jumping/flickering during scans.
+5.  **Config Relocation:** Moved `config.json` to `data/` folder for easier Docker volume management.
